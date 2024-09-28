@@ -312,6 +312,7 @@ windower.register_event('addon command', function(...)
 	elseif command[1] == 'help' then
 		windower.add_to_chat(7, 'Commands:')
 		windower.add_to_chat(7, 'mt set m1|m2|m3|m4|m5 # - sets the specified mastery to the number provided')
+		windower.add_to_chat(7, 'mt show|hide|visible|toggle - shows/hides or toggles visibility on the ui box')
 	elseif command[1]:lower() == 'show' or command[1]:lower() == 'hide' or command[1]:lower() == 'visible' or command[1]:lower() == 'toggle' then
 		toggleBox(command[1])
 	end
