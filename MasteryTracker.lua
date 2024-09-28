@@ -6,7 +6,7 @@ end)
 
 _addon.name = 'MasteryTracker'
 _addon.author = 'Otamarai'
-_addon.version = '0.1'
+_addon.version = '0.2'
 _addon.commands = {'masterytracker','mt'}
 require ('strings')
 require ('logger')
@@ -18,11 +18,18 @@ config = require('config')
 texts = require('texts')
 files = require ('files')
 masteryTable = require('MasteryTable')
+materiaTable = require('MateriaTable')
 spellTable = require('SpellTable')
+wsInfo = require('Weaponskills')
 
 --Defaults
 masteries = {}
+materia = {}
 thfSAFlag = false
+restStatus = false
+restTimeHP = false
+restTimeMP = false
+healedTime = false
 
 --Main text box
 txt = {}
@@ -41,59 +48,103 @@ settings = config.load(txt)
 masteryInfo = texts.new('${value}', settings)
 
 
---Load the player mastery data
+--Create the files to store the data if they don't already exist
 masteryData_file = files.new('MasteryData.lua')
-if masteryData_file:exists() then
-else
+if not masteryData_file:exists() then
 	masteryData = {}
 	masteryData_file:write('return ' .. T(masteryData):tovstring())
 end
 masteryData = require('MasteryData')
 
+materiaData_file = files.new('MateriaData.lua')
+if not materiaData_file:exists() then
+	materiaData = {}
+	materiaData_file:write('return ' .. T(materiaData):tovstring())
+end
+materiaData = require('MateriaData')
 
-function loadMasteryData()
+
+--Load the player mastery or materia data
+function loadData(dataType)
 	local player = windower.ffxi.get_player()
 	local job = player.main_job
 	local name = player.name
-	
-	if not masteryData[name] then
-		masteryData[name] = {}
-	end
-	if not masteryData[name][job] then
-		masteryData[name][job] = {}
-	end
-	for i = 1, 5 do
-		if not masteryData[name][job][i] then
-			masteryData[name][job][i] = 0
+	if not dataType then
+		return
+	elseif dataType == 'mastery' then
+		if not masteryData[name] then
+			masteryData[name] = {}
 		end
-		
-		if masteryData and masteryData[name] and masteryData[name][job] and masteryData[name][job][i] then
-			masteries[i] = masteryData[name][job][i]
+		if not masteryData[name][job] then
+			masteryData[name][job] = {}
+		end
+		for i = 1, 5 do
+			if not masteryData[name][job][i] then
+				masteryData[name][job][i] = 0
+			end
+			if masteryData and masteryData[name] and masteryData[name][job] and masteryData[name][job][i] then
+				masteries[i] = masteryData[name][job][i]
+			end
+		end
+	elseif dataType == 'materia' then
+		if not materiaData[name] then
+			materiaData[name] = {}
+		end
+		for i = 1, 4 do
+			if not materia[i] then
+				materia[i] = {}
+			end
+			if not materiaData[name][i] then
+				materiaData[name][i] = {}
+				for k = 1, #materiaTable[i] do
+					materiaData[name][i][k] = 0
+				end
+			end
+			for k = 1, #materiaTable[i] do
+				materia[i][k] = materiaData[name][i][k]
+			end
 		end
 	end
 end
 
-loadMasteryData()
+loadData('mastery')
+loadData('materia')
 
---Save the player mastery data
-function saveMasteryData()
+--Save the player mastery or materia data
+function saveData(dataType)
 	local player = windower.ffxi.get_player()
 	local job = player.main_job
 	local name = player.name
-	
-	if not masteryData[name] then
-		masteryData[name] = {}
-	end
-	if not masteryData[name][job] then
-		masteryData[name][job] = {}
-	end
-	for i = 1, 5 do
-		if not masteryData[name][job][i] then
-			masteryData[name][job][i] = {}
+	if not dataType then
+		return
+	elseif dataType == 'mastery' then
+		if not masteryData[name] then
+			masteryData[name] = {}
 		end
-		masteryData[name][job][i] = masteries[i]
+		if not masteryData[name][job] then
+			masteryData[name][job] = {}
+		end
+		for i = 1, 5 do
+			if not masteryData[name][job][i] then
+				masteryData[name][job][i] = {}
+			end
+			masteryData[name][job][i] = masteries[i]
+		end
+		masteryData_file:write('return ' .. T(masteryData):tovstring())
+	elseif dataType == 'materia' then
+		if not materiaData[name] then
+			materiaData[name] = {}
+		end
+		for i = 1, 4 do
+			if not materiaData[name][i] then
+				materiaData[name][i] = {}
+			end
+			for k = 1, #materiaTable[i] do
+				materiaData[name][i][k] = materia[i][k]
+			end
+		end
+		materiaData_file:write('return ' .. T(materiaData):tovstring())
 	end
-	masteryData_file:write('return ' .. T(masteryData):tovstring())
 end
 
 --Toggle the box visibility
@@ -157,11 +208,95 @@ windower.register_event('incoming chunk', function(id, data, modified, injected,
 		elseif isBuffActive(65) and not thfSAFlag then
 			thfSAFlag = true
 		end
+		local packets = packets.parse('incoming', data)
+		if packets['Status'] == 33 then
+			if not restStatus then
+				restTimeHP = os.clock()
+				restTimeMP = os.clock()
+			end
+			restStatus = true
+		elseif packets['Status'] ~= 33 then
+			restStatus = false
+			restTimeHP = false
+			restTimeMP = false
+		end
+	end
+end)
+
+windower.register_event('hp change', function(newHP, oldHP)
+	local player = windower.ffxi.get_player()
+	local hpChange = newHP - oldHP
+	if hpChange >= 1 and restStatus then
+		local autoRegen = false
+		for k, v in pairs(windower.ffxi.get_abilities().job_traits) do
+			if v == 9 then
+				autoRegen = true
+			end
+		end
+		if autoRegen and (player.vitals.max_hp - oldHP > 1) and hpChange == 1 then return end
+		if (isBuffActive(42) or isBuffActive(539)) and (player.vitals.max_hp - oldHP > 5) and hpChange == 5 then return end
+		if (isBuffActive(42) or isBuffActive(539)) and (player.vitals.max_hp - oldHP) >= 5 then
+			hpChange = hpChange - 5
+		end
+		if autoRegen then
+			hpChange = hpChange - 1
+		end
+		if healedTime and (math.abs(os.clock() - healedTime) <= 0.5) then return end
+		if ((os.clock() - restTimeHP) >= 8 and (os.clock() - restTimeHP) <= 13) or ((os.clock() - restTimeHP) >= 19 and (os.clock() - restTimeHP) <= 23) then
+			restTimeHP = os.clock()
+			if hpChange >= 1 then
+				materia[1][1] = materia[1][1] + hpChange
+				if materia[1][1] >= tonumber(materiaTable[1][1].Goal) then
+					materia[1][1] = 'Complete'
+				end
+				saveData('materia')
+				showBox()
+			end
+		end
+	end
+end)
+
+--Calculate the mp change while resting. This is not perfect, sometimes you will get a tic of refresh while resting mp back in the same go, but it's a decent estimate.
+windower.register_event('mp change', function(newMP, oldMP)
+	local player = windower.ffxi.get_player()
+	local mpChange = newMP - oldMP
+	if mpChange >= 1 and restStatus then
+		local autoRefresh = false
+		for k, v in pairs(windower.ffxi.get_abilities().job_traits) do
+			if v == 10 then
+				autoRefresh = true
+			end
+		end
+		if autoRefresh and (player.vitals.max_mp - oldMP > 1) and mpChange == 1 then return end
+		--Check for ballad or refresh, though can only check for one instance of ballad with this method
+		if (isBuffActive(43) or isBuffActive(541) or isBuffActive(196)) and (player.vitals.max_mp - oldMP > 4) and mpChange <= 4 then return end
+		
+		
+		if (isBuffActive(43) or isBuffActive(541)) and (player.vitals.max_mp - oldMP) >= 3 then
+			mpChange = mpChange - 3
+		end
+		if (isBuffActive(196)) and (player.vitals.max_mp - oldMP) >= 1 then
+			mpChange = mpChange - 1
+		end
+		if autoRefresh then
+			mpChange = mpChange - 1
+		end
+		if ((os.clock() - restTimeMP) >= 8 and (os.clock() - restTimeMP) <= 13) or ((os.clock() - restTimeMP) >= 19 and (os.clock() - restTimeMP) <= 23) then
+			restTimeMP = os.clock()
+			if mpChange >= 1 then
+				materia[1][2] = materia[1][2] + mpChange
+				if materia[1][2] >= tonumber(materiaTable[1][2].Goal) then
+					materia[1][2] = 'Complete'
+				end
+				saveData('materia')
+				showBox()
+			end
+		end
 	end
 end)
 
 
---Find what happened to hopefully get some mastery information
+--Find what happened to hopefully get some mastery and materia information
 windower.register_event('action', function(act)
 	local player = windower.ffxi.get_player()
 	local job = player.main_job
@@ -169,11 +304,13 @@ windower.register_event('action', function(act)
 		--Auto attack masteries
 		if act.category == 1 and (job == 'WAR' or job == 'MNK' or job == 'THF' or job == 'DRK' or job == 'SAM' or job == 'NIN' or job == 'DRG') then
 			if masteries[1] ~= 'Complete' then
-				masteries[1] = masteries[1] + act.targets[1].actions[1].param
+				for i = 1, #act.targets[1].actions do
+					masteries[1] = masteries[1] + act.targets[1].actions[i].param
+				end
 				if masteries[1] >= tonumber(masteryTable[job][1].Goal) then
 					masteries[1] = 'Complete'
 				end
-				saveMasteryData()
+				saveData('mastery')
 				showBox()
 			--THF Mastery 2
 			elseif masteries[1] == 'Complete' and masteries[2] ~= 'Complete' and job == 'THF' then
@@ -186,7 +323,7 @@ windower.register_event('action', function(act)
 				elseif thfSAFlag and (act.targets[1].actions[1].message == 1 or act.targets[1].actions[1].message == 15) then
 					thfSAFlag = false
 				end
-				saveMasteryData()
+				saveData('mastery')
 				showBox()
 			end
 		--Ranged attack masteries
@@ -196,7 +333,7 @@ windower.register_event('action', function(act)
 				if masteries[1] >= tonumber(masteryTable[job][1].Goal) then
 					masteries[1] = 'Complete'
 				end
-				saveMasteryData()
+				saveData('mastery')
 				showBox()
 			end
 		--JA masteries, just BST and THF for now
@@ -211,32 +348,74 @@ windower.register_event('action', function(act)
 					else
 						masteries[1] = masteries[1] + 1
 					end
-					saveMasteryData()
+					saveData('mastery')
 					showBox()
 				end
 			--THF use SA
 			elseif masteries[1] == 'Complete' and masteries[2] ~= 'Complete' and act.param == 44 then
 				thfSAFlag = true
 			end
-		--Spell cast masteries
-		elseif act.category == 4 and (job == 'WHM' or job == 'BLM' or job == 'RDM' or job == 'BLU' or job =='SMN' or job == 'BRD') then
-			if masteries[1] ~= 'Complete' then
-				--Too lazy to sort and add all the physical blu spells
-				if job == 'BLU' or (job ~= 'BLU' and spellTable[job]:contains(tostring(act.param))) then
-					if job ~= 'WHM' or (job == 'WHM' and not windower.ffxi.get_mob_by_id(act.targets[1].id).is_npc) then
-						if act.targets[1].actions[1].message ~= 75 and act.targets[1].actions[1].message ~= 85 and act.targets[1].actions[1].message ~= 284 and act.targets[1].actions[1].message ~= 653 and act.targets[1].actions[1].message ~= 654 and act.targets[1].actions[1].message ~= 655 and act.targets[1].actions[1].message ~= 656 then
-							--Check for physical blu spells here
-							if job ~= 'BLU' or (job == 'BLU' and res.jobs[16].element == 15 and res.jobs[16].targets == 32) then
-								if job == 'RDM' or job == 'SMN' or job == 'BRD' then
-									masteries[1] = masteries[1] + 1
-								else
-									masteries[1] = masteries[1] + act.targets[1].actions[1].param
+		--Weaponskill materia
+		elseif act.category == 3 then
+			local wsID = act.param
+			for i = 1, #wsInfo[wsID].modifier do
+				local materiaID = materiaTable[1]:with('Bonus', wsInfo[wsID].modifier[i]..'+1')
+				if materiaID then
+					materia[1][materiaID.id] = materia[1][materiaID.id] + 1
+					if materia[1][materiaID.id] >= tonumber(materiaTable[1][materiaID.id].Goal) then
+						materia[1][materiaID.id] = 'Complete'
+					end
+					saveData('materia')
+					showBox()
+				end
+			end
+			
+		
+		elseif act.category == 4 then
+			--Nukes and cures for materia tier 1
+			if materia[1][9] ~= 'Complete' and spellTable['INT']:contains(tostring(act.param)) then
+				materia[1][9] = materia[1][9] + 0.1
+				if materia[1][9] >= tonumber(materiaTable[1][9].Goal) then
+					materia[1][9] = 'Complete'
+				end
+				saveData('materia')
+				showBox()
+			elseif materia[1][8] ~= 'Complete' and spellTable['MND']:contains(tostring(act.param)) then
+				local realHealCheck = false
+				for i = 1, #act.targets do
+					if not windower.ffxi.get_mob_by_id(act.targets[i].id).is_npc and act.targets[i].actions[1].param >= 1 then
+						realHealCheck = true
+					end
+				end
+				if realHealCheck then
+					materia[1][8] = materia[1][8] + 0.1
+					if materia[1][8] >= tonumber(materiaTable[1][8].Goal) then
+						materia[1][8] = 'Complete'
+					end
+					saveData('materia')
+					showBox()
+				end
+			end
+			--Spell cast masteries
+			if job == 'WHM' or job == 'BLM' or job == 'RDM' or job == 'BLU' or job =='SMN' or job == 'BRD' then
+				if masteries[1] ~= 'Complete' then
+					--Too lazy to sort and add all the physical blu spells
+					if job == 'BLU' or (job ~= 'BLU' and spellTable[job]:contains(tostring(act.param))) then
+						if job ~= 'WHM' or (job == 'WHM' and not windower.ffxi.get_mob_by_id(act.targets[1].id).is_npc) then
+							if act.targets[1].actions[1].message ~= 75 and act.targets[1].actions[1].message ~= 85 and act.targets[1].actions[1].message ~= 284 and act.targets[1].actions[1].message ~= 653 and act.targets[1].actions[1].message ~= 654 and act.targets[1].actions[1].message ~= 655 and act.targets[1].actions[1].message ~= 656 then
+								--Check for physical blu spells here
+								if job ~= 'BLU' or (job == 'BLU' and res.jobs[16].element == 15 and res.jobs[16].targets == 32) then
+									if job == 'RDM' or job == 'SMN' or job == 'BRD' then
+										masteries[1] = masteries[1] + 1
+									else
+										masteries[1] = masteries[1] + act.targets[1].actions[1].param
+									end
+									if masteries[1] >= tonumber(masteryTable[job][1].Goal) then
+										masteries[1] = 'Complete'
+									end
+									saveData('mastery')
+									showBox()
 								end
-								if masteries[1] >= tonumber(masteryTable[job][1].Goal) then
-									masteries[1] = 'Complete'
-								end
-								saveMasteryData()
-								showBox()
 							end
 						end
 					end
@@ -245,23 +424,48 @@ windower.register_event('action', function(act)
 		end
 	--Needs testing to get accurate blocked value data
 	elseif act.targets[1] and act.targets[1].id and act.targets[1].id == player.id then
-		if job == 'PLD' and act.targets[1].actions[1] and act.targets[1].actions[1].reaction == 12 then	--normally reaction = 4 here, will monitor if it's different per server
-			local blockedDamage = act.targets[1].actions[1].param*((100-shieldBlockPercent())/100)
-			blockedDamage = math.floor(blockedDamage+0.5)
-			--This isn't perfect, being higher level can actually make the mobs do 0 damage, but it's as close as we're gonna get without actual pre-blocked damage values
-			if blockedDamage == 0 and not isBuffActive(50) and not isBuffActive(37) then blockedDamage = 1 end
-			masteries[1] = masteries[1] + blockedDamage
-			saveMasteryData()
-			showBox()
+		if job == 'PLD' then
+			for i = 1, #act.targets[1].actions do
+				if act.targets[1].actions[i] and act.targets[1].actions[i].reaction == 12 then	--normally reaction = 4 here, will monitor if it's different per server
+					local blockedDamage = act.targets[1].actions[i].param*((100-shieldBlockPercent())/100)
+					blockedDamage = math.floor(blockedDamage+0.5)
+					--This isn't perfect, being higher level can actually make the mobs do 0 damage, but it's as close as we're gonna get without actual pre-blocked damage values
+					if blockedDamage == 0 and not isBuffActive(50) and not isBuffActive(37) then blockedDamage = 1 end
+					masteries[1] = masteries[1] + blockedDamage
+					saveData('mastery')
+					showBox()
+				end
+			end
+		end
+		if act.category == 1 then
+			--Checking for damage taken to update DEF+1 materia
+			if materia[1][3] ~= 'Complete' then
+				for i = 1, #act.targets[1].actions do
+					materia[1][3] = materia[1][3] + act.targets[1].actions[i].param
+				end
+				if materia[1][3] >= tonumber(materiaTable[1][3].Goal) then
+					materia[1][3] = 'Complete'
+				end
+				saveData('materia')
+				showBox()
+			end
+		--Checking for heals to try and filter them out against rested healing tics
+		elseif act.category == 4 then
+			if spellTable['MND']:contains(tostring(act.param)) then
+				healedTime = os.clock()
+			end
 		end
 	end
 end)
 
 
 
+
+
+
 --Load new job mastery data upon job change
 windower.register_event('job change', function(mainjob_id, mainjob_level, subjob_id, subjob_level)
-	loadMasteryData()
+	loadData('mastery')
 	showBox()
 end)
 
@@ -283,6 +487,22 @@ function showBox()
 			end
 		end
 	end
+	list = list..'\n'
+	list = list..'Materia Progression\\cr\n'
+	for i = 1, 4 do
+		if materiaTable[i][1].Req then
+			list = list..'Tier '..i..' Materia\\cr\n'
+			for k = 1, #materiaTable[i] do
+				if materiaTable[i][k] then
+					if materia[i][k] == 'Complete' then
+						list = list..'\\cs(0,255,0)'..materiaTable[i][k].Bonus..': Complete!\\cr\n'
+					else
+						list = list..'\\cs(50,113,68)'..materiaTable[i][k].Bonus..': '..materia[i][k]..'\/'..materiaTable[i][k].Goal..' '..materiaTable[i][k].Req..'\\cr\n'
+					end
+				end
+			end
+		end
+	end
 	masteryInfo.value = list
 	masteryInfo:update()
 end
@@ -294,22 +514,29 @@ windower.register_event('addon command', function(...)
 	--Manually set the masteries here for your current job if something happened to the tracking or you aren't starting from 0
 	if command[1] == 'set' then
 		if command[2] then
-			if command[2] == 'm1' and command[3] and (command[3]:ucfirst() == 'Complete' or tonumber(command[3])) then
+			if command[2] == 'mas1' and command[3] and (command[3]:ucfirst() == 'Complete' or tonumber(command[3])) then
 				masteries[1] = tonumber(command[3]) or 'Complete'
-			elseif command[2] == 'm2' and command[3] and (command[3]:ucfirst() == 'Complete' or tonumber(command[3])) then
+			elseif command[2] == 'mas2' and command[3] and (command[3]:ucfirst() == 'Complete' or tonumber(command[3])) then
 				masteries[2] = tonumber(command[3]) or 'Complete'
-			elseif command[2] == 'm3' and command[3] and (command[3]:ucfirst() == 'Complete' or tonumber(command[3])) then
+			elseif command[2] == 'mas3' and command[3] and (command[3]:ucfirst() == 'Complete' or tonumber(command[3])) then
 				masteries[3] = tonumber(command[3]) or 'Complete'
-			elseif command[2] == 'm4' and command[3] and (command[3]:ucfirst() == 'Complete' or tonumber(command[3])) then
+			elseif command[2] == 'mas4' and command[3] and (command[3]:ucfirst() == 'Complete' or tonumber(command[3])) then
 				masteries[4] = tonumber(command[3]) or 'Complete'
-			elseif command[2] == 'm5' and command[3] and (command[3]:ucfirst() == 'Complete' or tonumber(command[3])) then
+			elseif command[2] == 'mas5' and command[3] and (command[3]:ucfirst() == 'Complete' or tonumber(command[3])) then
 				masteries[5] = tonumber(command[3]) or 'Complete'
+			elseif command[2] == 'mat' and command[3] and command[4] and command[5] then
+				local com3 = tonumber(command[3])
+				local com4 = tonumber(command[4])
+				if materia[com3] and materia[com3][com4] and (command[5]:ucfirst() == 'Complete' or tonumber(command[5])) then
+					materia[com3][com4] = tonumber(command[5]) or 'Complete'
+				end
 			end
 		end
 		showBox()
 	elseif command[1] == 'help' then
 		windower.add_to_chat(7, 'Commands:')
-		windower.add_to_chat(7, 'mt set m1|m2|m3|m4|m5 # - sets the specified mastery to the number provided')
+		windower.add_to_chat(7, 'mt set mas1|mas2|mas3|mas4|mas5 # - sets the specified mastery to the number provided')
+		windower.add_to_chat(7, 'mt set mat [tier] [materia#] # - sets the specified materia to the number provided. Example: "mt set mat 1 2 2000"')
 		windower.add_to_chat(7, 'mt show|hide|visible|toggle - shows/hides or toggles visibility on the ui box')
 	elseif command[1]:lower() == 'show' or command[1]:lower() == 'hide' or command[1]:lower() == 'visible' or command[1]:lower() == 'toggle' then
 		toggleBox(command[1])
