@@ -250,8 +250,6 @@ windower.register_event('action', function(act)
 			blockedDamage = math.floor(blockedDamage+0.5)
 			--This isn't perfect, being higher level can actually make the mobs do 0 damage, but it's as close as we're gonna get without actual pre-blocked damage values
 			if blockedDamage == 0 and not isBuffActive(50) and not isBuffActive(37) then blockedDamage = 1 end
-			windower.add_to_chat(7, 'Blocked: '..blockedDamage)
-			windower.add_to_chat(7, 'Got hit for: '..act.targets[1].actions[1].param)
 			masteries[1] = masteries[1] + blockedDamage
 			saveMasteryData()
 			showBox()
