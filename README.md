@@ -3,7 +3,7 @@ Small addon to track mastery and materia unlock progression on the Eventide FFXI
 
 Commands:
 
-mt set m1|m2|m3|m4|m5 # - sets the specified mastery to the number provided
+mt set mas1|mas2|mas3|mas4|mas5 # - sets the specified mastery to the number provided
 
 mt set mat [tier] [materia#] # - sets the specified materia to the number provided. Example: 'mt set mat 1 2 2000'
 
