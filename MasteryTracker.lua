@@ -6,7 +6,7 @@ end)
 
 _addon.name = 'MasteryTracker'
 _addon.author = 'Otamarai'
-_addon.version = '0.2'
+_addon.version = '0.2.1'
 _addon.commands = {'masterytracker','mt'}
 require ('strings')
 require ('logger')
