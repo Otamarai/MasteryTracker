@@ -10,4 +10,4 @@ mt set mat [tier] [materia#] # - sets the specified materia to the number provid
 
 mt show|hide|visible|toggle - shows/hides or toggles visibility on the ui box
 
-![image](https://github.com/user-attachments/assets/8bd66e3e-7718-445f-a102-5017ffc3e5d3)
+![image](https://github.com/user-attachments/assets/30b6ace5-5889-424c-8f61-b14dcd2f1b74)
