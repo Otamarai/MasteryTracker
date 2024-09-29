@@ -470,6 +470,16 @@ windower.register_event('job change', function(mainjob_id, mainjob_level, subjob
 end)
 
 
+Headers = T{
+	['Mastery'] = true,
+	['Materia'] = true,
+	['Tier1'] = true,
+	['Tier2'] = false,
+	['Tier3'] = false,
+	['Tier4'] = false,
+}
+
+
 
 --Populate the box
 function showBox()
@@ -477,31 +487,43 @@ function showBox()
 	if not player then return end
 	local job = player.main_job
 	list = ''
-	list = list..job..' Mastery Progression\\cr\n'
-	for i = 1, 5 do
-		if masteryTable[job] and masteryTable[job][i].Type then
-			if masteries[i] == 'Complete' then
-				list = list..'\\cs(0,255,0)Mastery '..i..': Complete!['..masteryTable[job][i].Bonus..']\\cr\n'
-			else
-				list = list..'\\cs(50,113,68)Mastery '..i..': '..masteries[i]..'\/'..masteryTable[job][i].Goal..' '..masteryTable[job][i].Type..'\\cr\n'
-			end
-		end
-	end
-	list = list..'\n'
-	list = list..'Materia Progression\\cr\n'
-	for i = 1, 4 do
-		if materiaTable[i][1].Req then
-			list = list..'Tier '..i..' Materia\\cr\n'
-			for k = 1, #materiaTable[i] do
-				if materiaTable[i][k] then
-					if materia[i][k] == 'Complete' then
-						list = list..'\\cs(0,255,0)'..materiaTable[i][k].Bonus..': Complete!\\cr\n'
-					else
-						list = list..'\\cs(50,113,68)'..materiaTable[i][k].Bonus..': '..materia[i][k]..'\/'..materiaTable[i][k].Goal..' '..materiaTable[i][k].Req..'\\cr\n'
-					end
+	if Headers['Mastery'] then
+		list = list..job..' Mastery Progression\\cs(35,64,232) ▼\\cr\n'
+		for i = 1, 5 do
+			if masteryTable[job] and masteryTable[job][i].Type then
+				if masteries[i] == 'Complete' then
+					list = list..'\\cs(0,255,0)Mastery '..i..': Complete!['..masteryTable[job][i].Bonus..']\\cr\n'
+				else
+					list = list..'\\cs(50,113,68)Mastery '..i..': '..masteries[i]..'\/'..masteryTable[job][i].Goal..' '..masteryTable[job][i].Type..'\\cr\n'
 				end
 			end
 		end
+	else
+		list = list..job..' Mastery Progression\\cs(35,64,232) ►\\cr\n'
+	end
+	list = list..'\n'
+	if Headers['Materia'] then
+		list = list..'Materia Progression\\cs(35,64,232) ▼\\cr\n'
+		for i = 1, 4 do
+			if materiaTable[i][1].Req then
+				if Headers['Tier'..i] then
+					list = list..'Tier '..i..' Materia\\cs(42,40,79) ▼\\cr\n'
+					for k = 1, #materiaTable[i] do
+						if materiaTable[i][k] then
+							if materia[i][k] == 'Complete' then
+								list = list..'\\cs(0,255,0)'..materiaTable[i][k].Bonus..': Complete!\\cr\n'
+							else
+								list = list..'\\cs(50,113,68)'..materiaTable[i][k].Bonus..': '..materia[i][k]..'\/'..materiaTable[i][k].Goal..' '..materiaTable[i][k].Req..'\\cr\n'
+							end
+						end
+					end
+				else
+					list = list..'Tier '..i..' Materia\\cs(42,40,79) ►\\cr\n'
+				end
+			end
+		end
+	else
+		list = list..'Materia Progression\\cs(35,64,232) ►\\cr\n'
 	end
 	masteryInfo.value = list
 	masteryInfo:update()
@@ -511,7 +533,7 @@ end
 
 windower.register_event('addon command', function(...)
 	local command = {...}
-	--Manually set the masteries here for your current job if something happened to the tracking or you aren't starting from 0
+	--Manually set the masteries or materia here for your current job if something happened to the tracking or you aren't starting from 0
 	if command[1] == 'set' then
 		if command[2] then
 			if command[2] == 'mas1' and command[3] and (command[3]:ucfirst() == 'Complete' or tonumber(command[3])) then
@@ -533,6 +555,9 @@ windower.register_event('addon command', function(...)
 			end
 		end
 		showBox()
+	elseif command[1] == 'header' and command[2] then
+		Headers[command[2]] = not Headers[command[2]]
+		showBox()
 	elseif command[1] == 'help' then
 		windower.add_to_chat(7, 'Commands:')
 		windower.add_to_chat(7, 'mt set mas1|mas2|mas3|mas4|mas5 # - sets the specified mastery to the number provided')
@@ -545,7 +570,64 @@ end)
 
 
 
-
+--Mouse detection for the box
+windower.register_event('mouse', function(type, x, y, delta, blocked)
+	local player = windower.ffxi.get_player()
+	local mx, my = texts.extents(masteryInfo)
+	local buttonLines = masteryInfo:text():count('\n')
+	local hx = (x - settings.pos.x)
+	local hy = (y - settings.pos.y)
+	local location = {}
+	location.offset = my / buttonLines
+	location[1] = {}
+	location[1].ya = 1
+	location[1].yb = location.offset
+	for i = 2, buttonLines do
+		location[i] = {}
+		location[i].ya = location[i - 1].yb
+		location[i].yb = location[i - 1].yb + location.offset
+	end
+	--On left click
+	if type == 2 then
+		if masteryInfo:hover(x, y) and masteryInfo:visible() then
+			for i, v in ipairs(location) do
+				local n = 1
+				local switchb = {}
+				switchb[n] = 'Mastery'
+				n = n + 1
+				if Headers['Mastery'] then
+					for k = 1, 5 do
+						if masteryTable[player.main_job] and masteryTable[player.main_job][k].Type then
+							n = n + 1
+						end
+					end
+				end
+				n = n + 1
+				switchb[n] = 'Materia'
+				if Headers['Materia'] then
+					for j = 1, 4 do
+						if materiaTable[j][1].Req then
+							n = n + 1
+							switchb[n] = 'Tier'..j
+							if Headers['Tier'..j] then
+								for k = 1, #materiaTable[j] do
+									if materiaTable[j][k] then
+										n = n + 1
+									end
+								end
+							end
+						end
+					end
+				end
+				if hy > location[i].ya and hy < location[i].yb then
+					if switchb[i] and switchb[i] ~= "" then
+						windower.send_command("mt header "..switchb[i])
+					end
+				end
+			end
+		end
+	end
+end)
 
 
 
