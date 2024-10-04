@@ -67,6 +67,7 @@ materiaData = require('MateriaData')
 --Load the player mastery or materia data
 function loadData(dataType)
 	local player = windower.ffxi.get_player()
+	if not player then return end
 	local job = player.main_job
 	local name = player.name
 	if not dataType then
