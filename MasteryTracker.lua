@@ -361,7 +361,7 @@ windower.register_event('action', function(act)
 			local wsID = act.param
 			for i = 1, #wsInfo[wsID].modifier do
 				local materiaID = materiaTable[1]:with('Bonus', wsInfo[wsID].modifier[i]..'+1')
-				if materiaID then
+				if materiaID and materia[1][materiaID.id] ~= 'Complete' then
 					materia[1][materiaID.id] = materia[1][materiaID.id] + 1
 					if materia[1][materiaID.id] >= tonumber(materiaTable[1][materiaID.id].Goal) then
 						materia[1][materiaID.id] = 'Complete'
@@ -530,6 +530,10 @@ function showBox()
 	masteryInfo:update()
 end
 
+
+windower.register_event('login', function()
+	showBox()
+end)
 
 
 windower.register_event('addon command', function(...)
