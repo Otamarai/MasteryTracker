@@ -1,6 +1,4 @@
 windower.register_event('load',function ()
-	toggleBox('show')
-	showBox()
 	--Mastery Tracking for the Eventide server, will be updating as more masteries are added to the game
 end)
 
@@ -108,8 +106,7 @@ function loadData(dataType)
 	end
 end
 
-loadData('mastery')
-loadData('materia')
+
 
 --Save the player mastery or materia data
 function saveData(dataType)
@@ -532,6 +529,9 @@ end
 
 
 windower.register_event('login', function()
+	loadData('mastery')
+	loadData('materia')
+	toggleBox('show')
 	showBox()
 end)
 
