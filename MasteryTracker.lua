@@ -245,7 +245,7 @@ windower.register_event('hp change', function(newHP, oldHP)
 		if healedTime and (math.abs(os.clock() - healedTime) <= 0.5) then return end
 		if ((os.clock() - restTimeHP) >= 8 and (os.clock() - restTimeHP) <= 13) or ((os.clock() - restTimeHP) >= 19 and (os.clock() - restTimeHP) <= 23) then
 			restTimeHP = os.clock()
-			if hpChange >= 1 then
+			if hpChange >= 1 and materia[1][1] and materia[1][1] ~= 'Complete' then
 				materia[1][1] = materia[1][1] + hpChange
 				if materia[1][1] >= tonumber(materiaTable[1][1].Goal) then
 					materia[1][1] = 'Complete'
@@ -284,7 +284,7 @@ windower.register_event('mp change', function(newMP, oldMP)
 		end
 		if ((os.clock() - restTimeMP) >= 8 and (os.clock() - restTimeMP) <= 13) or ((os.clock() - restTimeMP) >= 19 and (os.clock() - restTimeMP) <= 23) then
 			restTimeMP = os.clock()
-			if mpChange >= 1 then
+			if mpChange >= 1 and materia[1][2] and materia[1][2] ~= 'Complete' then
 				materia[1][2] = materia[1][2] + mpChange
 				if materia[1][2] >= tonumber(materiaTable[1][2].Goal) then
 					materia[1][2] = 'Complete'
@@ -511,7 +511,7 @@ function showBox()
 					list = list..'Tier '..i..' Materia\\cs(42,40,79) ▼\\cr\n'
 					for k = 1, #materiaTable[i] do
 						if materiaTable[i][k] then
-							if materia[i][k] == 'Complete' then
+							if materia[i][k] and materia[i][k] == 'Complete' then
 								list = list..'\\cs(0,255,0)'..materiaTable[i][k].Bonus..': Complete!\\cr\n'
 							else
 								list = list..'\\cs(50,113,68)'..materiaTable[i][k].Bonus..': '..materia[i][k]..'\/'..materiaTable[i][k].Goal..' '..materiaTable[i][k].Req..'\\cr\n'
