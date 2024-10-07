@@ -1,5 +1,6 @@
 windower.register_event('load',function ()
 	--Mastery Tracking for the Eventide server, will be updating as more masteries are added to the game
+	toggleBox('show')
 end)
 
 _addon.name = 'MasteryTracker'
@@ -527,7 +528,10 @@ function showBox()
 	masteryInfo:update()
 end
 
-
+loadData('mastery')
+loadData('materia')
+toggleBox('show')
+showBox()
 windower.register_event('login', function()
 	loadData('mastery')
 	loadData('materia')
