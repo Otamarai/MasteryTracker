@@ -347,6 +347,9 @@ windower.register_event('action', function(act)
 					else
 						masteries[1] = masteries[1] + 1
 					end
+					if masteries[1] >= tonumber(masteryTable[job][1].Goal) then
+						masteries[1] = 'Complete'
+					end
 					saveData('mastery')
 					showBox()
 				end
@@ -536,6 +539,11 @@ windower.register_event('login', function()
 	loadData('mastery')
 	loadData('materia')
 	toggleBox('show')
+	showBox()
+end)
+
+windower.register_event('logout', function()
+	toggleBox('hide')
 	showBox()
 end)
 
